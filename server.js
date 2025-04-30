@@ -1,4 +1,4 @@
-// server.js - Minimal version with QR code redirection
+// server.js - Updated version with fixed QR code redirection
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -83,20 +83,24 @@ io.on('connection', (socket) => {
   });
 });
 
-// *** Key addition: Special handling for QR code routes ***
+// *** FIXED: Improved QR code route handling ***
 // Handle /receive route and redirect to the frontend
 app.get('/receive', (req, res) => {
   const roomId = req.query.room;
   
+  if (!roomId) {
+    return res.status(400).send('Missing room parameter');
+  }
+  
   // Get the frontend URL from environment variable or use default
   // THIS IS IMPORTANT: Set this environment variable in your Render.com dashboard
-  const frontendUrl = process.env.FRONTEND_URL || 'https://sharo-p2p.netlify.app';
+  const frontendUrl = process.env.FRONTEND_URL || 'https://sharo.onrender.com/';
   
   // Redirect to the frontend with the room parameter
   const redirectUrl = `${frontendUrl}/receive?room=${roomId}`;
   console.log(`Redirecting QR code scan to: ${redirectUrl}`);
   
-  res.redirect(redirectUrl);
+  res.redirect(301, redirectUrl);
 });
 
 // API routes
@@ -125,13 +129,26 @@ app.get('/', (req, res) => {
         <div class="container">
           <h1>Sharo P2P File Sharing</h1>
           <p>This is the signaling server for Sharo P2P File Sharing application.</p>
-          <p>To use the application, please visit: <a href="${process.env.FRONTEND_URL || 'https://sharo-p2p.netlify.app'}" target="_blank">${process.env.FRONTEND_URL || 'https://sharo-p2p.netlify.app'}</a></p>
+          <p>To use the application, please visit: <a href="${process.env.FRONTEND_URL || 'https://sharo.onrender.com/'}" target="_blank">${process.env.FRONTEND_URL || 'https://sharo.onrender.com/'}</a></p>
           <p>Server Status: Running</p>
           <p>Active Rooms: ${Object.keys(rooms).length}</p>
+          <p>QR Code Redirect URL: <code>${process.env.FRONTEND_URL || 'https://sharo.onrender.com/'}/receive?room=[ROOM_ID]</code></p>
         </div>
       </body>
     </html>
   `);
+});
+
+// Add a diagnostic route to check if redirection works
+app.get('/check-redirect', (req, res) => {
+  const frontendUrl = process.env.FRONTEND_URL || 'https://sharo.onrender.com/';
+  res.json({
+    status: 'ok',
+    frontendUrl: frontendUrl,
+    redirectEndpoint: '/receive',
+    fullRedirectExample: `${frontendUrl}/receive?room=example-room-123`,
+    note: 'This endpoint helps diagnose if the redirection is working properly'
+  });
 });
 
 // Start the server
@@ -139,4 +156,5 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Signaling server running on port ${PORT}`);
   console.log(`QR Code redirection mode active.`);
+  console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'https://sharo.onrender.com/'}`);
 });

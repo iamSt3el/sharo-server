@@ -1,15 +1,13 @@
-// server.js
+// server.js - Minimal version with QR code redirection
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const path = require('path');
-const fs = require('fs');
 
 // Set up Express
 const app = express();
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "*",
+  origin: '*',
   methods: ["GET", "POST"]
 }));
 
@@ -18,7 +16,7 @@ const server = http.createServer(app);
 // Create Socket.IO server with CORS configuration
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "*",
+    origin: '*',
     methods: ["GET", "POST"]
   }
 });
@@ -85,45 +83,60 @@ io.on('connection', (socket) => {
   });
 });
 
+// *** Key addition: Special handling for QR code routes ***
+// Handle /receive route and redirect to the frontend
+app.get('/receive', (req, res) => {
+  const roomId = req.query.room;
+  
+  // Get the frontend URL from environment variable or use default
+  // THIS IS IMPORTANT: Set this environment variable in your Render.com dashboard
+  const frontendUrl = process.env.FRONTEND_URL || 'https://sharo-p2p.netlify.app';
+  
+  // Redirect to the frontend with the room parameter
+  const redirectUrl = `${frontendUrl}/receive?room=${roomId}`;
+  console.log(`Redirecting QR code scan to: ${redirectUrl}`);
+  
+  res.redirect(redirectUrl);
+});
+
 // API routes
 app.get('/api/status', (req, res) => {
   res.json({ 
     status: 'Signaling server is running', 
-    rooms: Object.keys(rooms).length 
+    rooms: Object.keys(rooms).length,
+    mode: 'redirect-mode'
   });
 });
 
-// Check if build directory exists
-const buildPath = path.join(__dirname, 'build');
-const indexPath = path.join(buildPath, 'index.html');
-const hasBuildFolder = fs.existsSync(buildPath) && fs.existsSync(indexPath);
-
-if (hasBuildFolder) {
-  console.log('Found build directory, serving static files');
-  // Serve static files from the 'build' folder if it exists
-  app.use(express.static(buildPath));
-  
-  // Catch-all route that serves the React app for client-side routes
-  app.get('*', (req, res) => {
-    res.sendFile(indexPath);
-  });
-} else {
-  console.log('No build directory found, running in API-only mode');
-  
-  // If no build folder, provide info on root route
-  app.get('/', (req, res) => {
-    res.json({
-      message: 'Sharo Signaling Server is running in API-only mode',
-      info: 'For full functionality, deploy the React app and add the build folder',
-      endpoints: ['/api/status'],
-      webSocketEndpoint: '/',
-      currentRooms: Object.keys(rooms).length
-    });
-  });
-}
+// Basic route for root
+app.get('/', (req, res) => {
+  res.send(`
+    <html>
+      <head>
+        <title>Sharo P2P File Sharing - Server</title>
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
+          h1 { color: #333; }
+          a { color: #0066cc; }
+          .container { border: 1px solid #ddd; padding: 20px; border-radius: 5px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>Sharo P2P File Sharing</h1>
+          <p>This is the signaling server for Sharo P2P File Sharing application.</p>
+          <p>To use the application, please visit: <a href="${process.env.FRONTEND_URL || 'https://sharo-p2p.netlify.app'}" target="_blank">${process.env.FRONTEND_URL || 'https://sharo-p2p.netlify.app'}</a></p>
+          <p>Server Status: Running</p>
+          <p>Active Rooms: ${Object.keys(rooms).length}</p>
+        </div>
+      </body>
+    </html>
+  `);
+});
 
 // Start the server
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Signaling server running on port ${PORT}`);
+  console.log(`QR Code redirection mode active.`);
 });

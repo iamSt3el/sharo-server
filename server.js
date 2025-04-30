@@ -4,6 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 
 // Set up Express
 const app = express();
@@ -11,11 +12,6 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || "*",
   methods: ["GET", "POST"]
 }));
-
-// Serve static files from the 'build' folder in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, 'build')));
-}
 
 const server = http.createServer(app);
 
@@ -91,14 +87,38 @@ io.on('connection', (socket) => {
 
 // API routes
 app.get('/api/status', (req, res) => {
-  res.json({ status: 'Signaling server is running' });
+  res.json({ 
+    status: 'Signaling server is running', 
+    rooms: Object.keys(rooms).length 
+  });
 });
 
-// Important: Catch-all route that serves the React app for all client-side routes
-// This ensures that routes like /receive work properly
-if (process.env.NODE_ENV === 'production') {
+// Check if build directory exists
+const buildPath = path.join(__dirname, 'build');
+const indexPath = path.join(buildPath, 'index.html');
+const hasBuildFolder = fs.existsSync(buildPath) && fs.existsSync(indexPath);
+
+if (hasBuildFolder) {
+  console.log('Found build directory, serving static files');
+  // Serve static files from the 'build' folder if it exists
+  app.use(express.static(buildPath));
+  
+  // Catch-all route that serves the React app for client-side routes
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'build', 'index.html'));
+    res.sendFile(indexPath);
+  });
+} else {
+  console.log('No build directory found, running in API-only mode');
+  
+  // If no build folder, provide info on root route
+  app.get('/', (req, res) => {
+    res.json({
+      message: 'Sharo Signaling Server is running in API-only mode',
+      info: 'For full functionality, deploy the React app and add the build folder',
+      endpoints: ['/api/status'],
+      webSocketEndpoint: '/',
+      currentRooms: Object.keys(rooms).length
+    });
   });
 }
 
